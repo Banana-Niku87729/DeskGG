@@ -19,6 +19,15 @@
   <None Include="SplashImage.png">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
   </None>
+  <Compile Remove="updater\**" />
+  <Compile Remove="updater\obj\**" />
+  <Compile Remove="updater\bin\**" />
+  <EmbeddedResource Remove="updater\**" />
+  <None Remove="updater\**" />
+  <Compile Remove="launcher\**" />
+  <Compile Remove="launcher\obj\**" />
+  <Compile Remove="launcher\bin\**" />
+  <EmbeddedResource Remove="launcher\**" />
+  <None Remove="launcher\**" />
   </ItemGroup>
-
 </Project>

@@ -12,7 +12,7 @@ namespace DesktopAppFolder;
 public class TrayAppContext : ApplicationContext
 {
     const string AppName = "DeskGG";
-    const string Version = "1.0.0"; 
+    const string Version = "1.0.1"; 
 
     private readonly Control _uiMarshal;
     private readonly NotifyIcon _trayIcon;

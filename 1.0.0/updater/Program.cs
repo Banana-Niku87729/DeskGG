@@ -12,12 +12,12 @@ namespace DeskGGUpdater
     {
         // ================= 設定 =================
 
-        /// <summary>DeskGGがインストールされているか確認するフォルダ</summary>
-        private const string ValidDeskGGDir = @"C:\rec877dev\valid\deskgg";
-
-        /// <summary>DeskGGの実際のインストール先(置き換え対象)。
-        /// 必要に応じてValidDeskGGDirと別のパスに変更してください。</summary>
-        private const string InstallDir = ValidDeskGGDir;
+        /// <summary>
+        /// インストール先パスが書かれた「ファイル」(フォルダではない)。
+        /// 中身の例: C:\rec877dev\deskgg
+        /// これにより、DeskGGの実際の設置場所をユーザー側で自由に変更できる。
+        /// </summary>
+        private const string ValidMarkerFilePath = @"C:\rec877dev\valid\deskgg";
 
         private const string VersionDir = @"C:\rec877dev\version\deskgg";
         private static readonly string LocalVersionJsonPath = Path.Combine(VersionDir, "version.json");
@@ -38,7 +38,19 @@ namespace DeskGGUpdater
         private static readonly string UpdateSplashImage =
             Path.Combine(AppDir, "Update_SplashImage.png");
 
-        private static readonly string DeskGGExePath = Path.Combine(InstallDir, "DeskGG.exe");
+        /// <summary>このUpdater自身の実行ファイルのフルパス。自己上書き回避に使用する。</summary>
+        private static readonly string SelfExePath =
+            Process.GetCurrentProcess().MainModule?.FileName
+            ?? Path.Combine(AppDir, "DeskGGUpdater.exe");
+
+        /// <summary>このUpdater自身の拡張子なしファイル名 (例: "DeskGGUpdater")。
+        /// 同名の.exe/.dll/.pdb/.json等をまとめて上書き対象から除外するために使う。</summary>
+        private static readonly string SelfBaseName = Path.GetFileNameWithoutExtension(SelfExePath);
+
+        // valid マーカーファイルの中身から解決される、実際のインストール先。
+        // MainFlowAsync内で決定するため実行時に設定する。
+        private static string InstallDir = string.Empty;
+        private static string DeskGGExePath = string.Empty;
 
         private static SplashForm? _checkingSplash;
         private static SplashForm? _updateSplash;
@@ -84,12 +96,37 @@ namespace DeskGGUpdater
 
         private static async Task MainFlowAsync()
         {
-            bool deskggExists = Directory.Exists(ValidDeskGGDir) && File.Exists(DeskGGExePath);
-
-            if (!deskggExists)
+            // ---- valid マーカーファイルの確認 & インストール先の解決 ----
+            if (!TryResolveInstallDir(out InstallDir, out string resolveError))
             {
-                // インストールが確認できない場合はそのまま起動を試みる
-                LaunchDeskGG();
+                // マーカーファイルが無い/内容が不正な場合は、Updaterと同じフォルダに
+                // DeskGG.exeがあればそれをそのまま起動する(最後の手段)。
+                string fallbackExe = Path.Combine(AppDir, "DeskGG.exe");
+                if (File.Exists(fallbackExe))
+                {
+                    InstallDir = AppDir;
+                    DeskGGExePath = fallbackExe;
+                    LaunchDeskGG();
+                    return;
+                }
+
+                MessageBox.Show(
+                    $"インストール先を特定できませんでした。\n{resolveError}",
+                    "DeskGG Updater",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+
+            DeskGGExePath = Path.Combine(InstallDir, "DeskGG.exe");
+
+            if (!File.Exists(DeskGGExePath))
+            {
+                MessageBox.Show(
+                    $"指定されたインストール先にDeskGG.exeが見つかりません。\n{InstallDir}",
+                    "DeskGG Updater",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return;
             }
 
@@ -159,6 +196,57 @@ namespace DeskGGUpdater
             }
 
             LaunchDeskGG();
+        }
+
+        // ================= インストール先の解決 =================
+
+        /// <summary>
+        /// C:\rec877dev\valid\deskgg というファイル(フォルダではない)の中身を読み、
+        /// そこに書かれたパスが実在し、DeskGG.exeを含んでいるかを確認する。
+        /// </summary>
+        private static bool TryResolveInstallDir(out string installDir, out string error)
+        {
+            installDir = string.Empty;
+            error = string.Empty;
+
+            if (Directory.Exists(ValidMarkerFilePath))
+            {
+                // 誤ってフォルダが存在している場合は不正とみなす
+                error = $"{ValidMarkerFilePath} はファイルではなくフォルダとして存在しています。";
+                return false;
+            }
+
+            if (!File.Exists(ValidMarkerFilePath))
+            {
+                error = $"{ValidMarkerFilePath} が見つかりません。";
+                return false;
+            }
+
+            string rawPath;
+            try
+            {
+                rawPath = File.ReadAllText(ValidMarkerFilePath).Trim();
+            }
+            catch (Exception ex)
+            {
+                error = $"{ValidMarkerFilePath} の読み込みに失敗しました。\n{ex.Message}";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(rawPath))
+            {
+                error = $"{ValidMarkerFilePath} の内容が空です。インストール先パスを記入してください。";
+                return false;
+            }
+
+            if (!Directory.Exists(rawPath))
+            {
+                error = $"{ValidMarkerFilePath} に記載されたフォルダが存在しません。\n記載内容: {rawPath}";
+                return false;
+            }
+
+            installDir = rawPath;
+            return true;
         }
 
         // ================= バージョン確認 =================
@@ -270,6 +358,19 @@ namespace DeskGGUpdater
             return true;
         }
 
+        // ================= 自己ファイル判定 (フリーズ/上書きエラー対策) =================
+
+        /// <summary>
+        /// 指定パスがUpdater自身の実行ファイル(またはその関連ファイル)かどうかを判定する。
+        /// InstallDirの中にUpdater.exe自体が同居しているケースで、
+        /// 実行中の自分自身を削除・上書きしようとしてフリーズ/例外になるのを防ぐ。
+        /// </summary>
+        private static bool IsSelfRelatedFile(string filePath)
+        {
+            string fileBaseName = Path.GetFileNameWithoutExtension(filePath);
+            return string.Equals(fileBaseName, SelfBaseName, StringComparison.OrdinalIgnoreCase);
+        }
+
         // ================= バックアップ =================
 
         private static string BackupCurrentInstall()
@@ -277,16 +378,25 @@ namespace DeskGGUpdater
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string backupDir = Path.Combine(BackupRootDir, timestamp);
             Directory.CreateDirectory(backupDir);
-            CopyDirectory(InstallDir, backupDir);
+            CopyDirectory(InstallDir, backupDir, skipSelf: false);
             return backupDir;
         }
 
-        private static void CopyDirectory(string sourceDir, string destDir)
+        /// <summary>
+        /// skipSelf=true の場合、Updater自身に関連するファイルはコピー/削除対象から除外する。
+        /// (自分自身が実行中のままロックされているファイルへの操作を避けるため)
+        /// </summary>
+        private static void CopyDirectory(string sourceDir, string destDir, bool skipSelf)
         {
             Directory.CreateDirectory(destDir);
 
             foreach (var file in Directory.GetFiles(sourceDir))
             {
+                if (skipSelf && IsSelfRelatedFile(file))
+                {
+                    continue;
+                }
+
                 string dest = Path.Combine(destDir, Path.GetFileName(file));
                 File.Copy(file, dest, overwrite: true);
             }
@@ -294,7 +404,7 @@ namespace DeskGGUpdater
             foreach (var dir in Directory.GetDirectories(sourceDir))
             {
                 string destSubDir = Path.Combine(destDir, Path.GetFileName(dir));
-                CopyDirectory(dir, destSubDir);
+                CopyDirectory(dir, destSubDir, skipSelf);
             }
         }
 
@@ -313,9 +423,16 @@ namespace DeskGGUpdater
             {
                 await DownloadGitHubFolderAsync(http, GitHubApiContentsUrl, tempDir);
 
-                // 既存のインストール内容を削除してから新しいファイルで置き換える
+                // 既存のインストール内容を削除してから新しいファイルで置き換える。
+                // ただしUpdater自身が InstallDir 内にいる場合、実行中の自分自身を
+                // 削除しようとするとフリーズ/例外になるため除外する。
                 foreach (var file in Directory.GetFiles(InstallDir))
                 {
+                    if (IsSelfRelatedFile(file))
+                    {
+                        continue;
+                    }
+
                     File.Delete(file);
                 }
 
@@ -324,7 +441,10 @@ namespace DeskGGUpdater
                     Directory.Delete(dir, recursive: true);
                 }
 
-                CopyDirectory(tempDir, InstallDir);
+                // ダウンロードした新しいファイルで上書き。
+                // 万一Latest配布物にUpdaterと同名のファイルが含まれていても、
+                // 自分自身は上書きしない(次回起動時に反映される想定)。
+                CopyDirectory(tempDir, InstallDir, skipSelf: true);
             }
             finally
             {

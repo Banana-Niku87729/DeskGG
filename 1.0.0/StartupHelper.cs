@@ -12,6 +12,11 @@ public static class StartupHelper
     private const string StartupApprovedKeyPath =
         @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     private const string ValueName = "DesktopAppFolder";
+    private const string LauncherExeName = "launcher.exe";
+
+    /// <summary>DeskGG.exeと同じフォルダーにあるlauncher.exeのフルパスを返す。</summary>
+    private static string LauncherPath =>
+        Path.Combine(Path.GetDirectoryName(Application.ExecutablePath)!, LauncherExeName);
 
     public static bool IsRegistered()
     {
@@ -30,7 +35,7 @@ public static class StartupHelper
 
         if (enabled)
         {
-            key.SetValue(ValueName, $"\"{Application.ExecutablePath}\"");
+            key.SetValue(ValueName, $"\"{LauncherPath}\"");
             ClearTaskManagerDisableFlag();
         }
         else
