@@ -21,8 +21,9 @@ namespace DeskGGLauncher
         private static readonly string UpdaterExePath =
             Path.Combine(AppContext.BaseDirectory, "updater.exe");
 
-        private static readonly string DeskGGExePath =
-            Path.Combine(AppContext.BaseDirectory, "DeskGG.exe");
+        // deskgg フォルダのフルパスが書かれているファイル（拡張子なし）
+        private const string DeskGGExePathFile =
+            @"C:\rec877dev\valid\deskgg";
 
         [STAThread]
         private static void Main()
@@ -175,7 +176,59 @@ namespace DeskGGLauncher
 
         private static void StartDeskGG()
         {
-            StartProcess(DeskGGExePath, "DeskGG.exe");
+            string deskGGExePath;
+
+            try
+            {
+                deskGGExePath = ReadDeskGGExePathFromValidFile();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"DeskGG.exe のパス情報を取得できませんでした。\n\n詳細: {ex.Message}",
+                    "エラー",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+
+            StartProcess(deskGGExePath, "DeskGG.exe");
+        }
+
+        /// <summary>
+        /// C:\rec877dev\valid\deskgg （拡張子なし）の存在を確認し、
+        /// その中に書かれている deskgg フォルダのフルパスを読み込んだうえで、
+        /// そのフォルダ直下に DeskGG.exe があるかを確認してフルパスを返す
+        /// </summary>
+        private static string ReadDeskGGExePathFromValidFile()
+        {
+            // 1. valid\deskgg ファイル自体の存在確認
+            if (!File.Exists(DeskGGExePathFile))
+            {
+                throw new FileNotFoundException(
+                    $"パス情報ファイルが見つかりません。\nパス: {DeskGGExePathFile}",
+                    DeskGGExePathFile);
+            }
+
+            // 2. 中身（deskgg フォルダのフルパス）を読み込む
+            string deskggDirPath = File.ReadAllText(DeskGGExePathFile).Trim();
+
+            if (string.IsNullOrWhiteSpace(deskggDirPath))
+            {
+                throw new InvalidOperationException(
+                    $"パス情報ファイルの中身が空です。\nパス: {DeskGGExePathFile}");
+            }
+
+            if (!Directory.Exists(deskggDirPath))
+            {
+                throw new DirectoryNotFoundException(
+                    $"パス情報ファイルに記載されたフォルダが見つかりません。\nフォルダ: {deskggDirPath}");
+            }
+
+            // 3. そのフォルダ直下に DeskGG.exe があるかを確認
+            string deskGGExePath = Path.Combine(deskggDirPath, "DeskGG.exe");
+
+            return deskGGExePath;
         }
 
         private static void StartProcess(string path, string displayName)

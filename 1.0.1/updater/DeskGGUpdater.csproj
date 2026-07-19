@@ -13,7 +13,9 @@
 
   <ItemGroup>
     <!-- icon.ico をプロジェクトフォルダに配置してください -->
-    <None Include="icon.ico" Condition="Exists('icon.ico')" />
+    <None Include="icon.ico" Condition="Exists('icon.ico')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
 
     <!-- スプラッシュ画像はビルド時に出力フォルダへコピーされます -->
     <None Include="DeskGGUpdate_SplashImage_Checking.png" Condition="Exists('DeskGGUpdate_SplashImage_Checking.png')">
