@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <AssemblyName>DeskGGUpdater</AssemblyName>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- icon.ico をプロジェクトフォルダに配置してください -->
+    <None Include="icon.ico" Condition="Exists('icon.ico')" />
+
+    <!-- スプラッシュ画像はビルド時に出力フォルダへコピーされます -->
+    <None Include="DeskGGUpdate_SplashImage_Checking.png" Condition="Exists('DeskGGUpdate_SplashImage_Checking.png')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Update_SplashImage.png" Condition="Exists('Update_SplashImage.png')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
