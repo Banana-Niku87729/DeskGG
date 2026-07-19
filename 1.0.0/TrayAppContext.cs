@@ -18,7 +18,6 @@ public class TrayAppContext : ApplicationContext
     private readonly NotifyIcon _trayIcon;
     private readonly Dictionary<Guid, FolderData> _folders = new();
     private readonly Dictionary<Guid, PopupForm> _openPopups = new();
-    private readonly SynchronizationContext _uiContext;
 
     private readonly HashSet<string> _selfWrittenFileNames = new(StringComparer.OrdinalIgnoreCase);
     private FileSystemWatcher? _desktopWatcher;
@@ -71,7 +70,22 @@ public class TrayAppContext : ApplicationContext
                 NotifyFilter = NotifyFilters.FileName
             };
             _desktopWatcher.Renamed += (_, e) =>
-                _uiContext.Post(_ => OnDesktopShortcutRenamed(e.OldName, e.Name), null);
+            {
+                string? oldName = e.OldName;
+                string? newName = e.Name;
+                if (_uiMarshal.IsHandleCreated && !_uiMarshal.IsDisposed)
+                {
+                    try
+                    {
+                        _uiMarshal.BeginInvoke(new Action(() => OnDesktopShortcutRenamed(oldName, newName)));
+                    }
+                    catch (Exception ex)
+                    {
+                        // BeginInvoke自体が失敗しても(例: 終了処理中など)アプリを道連れにしない
+                        LogToFile($"Renamed handler BeginInvoke failed: {ex}");
+                    }
+                }
+            };
             _desktopWatcher.EnableRaisingEvents = true;
         }
         catch (Exception ex)
@@ -221,7 +235,10 @@ public class TrayAppContext : ApplicationContext
         foreach (var data in all)
         {
             // ShortcutFileNameが設定済み(=一度は作成済み)なのに、
-            // デスクトップ上に実体が無い場合はユーザーが手動で削除したとみなす
+            // デスクトップ上に実体が無い場合はユーザーが手動で削除したとみなす。
+            // ただし、直前の異常終了(ショートカット再作成の途中でクラッシュ等)で
+            // 一時的に実体が欠けているだけの可能性があるため、即削除はせず
+            // 一度だけ再生成を試みてから最終判断する。
             if (!string.IsNullOrEmpty(data.ShortcutFileName))
             {
                 string expectedPath = Path.Combine(
@@ -230,8 +247,27 @@ public class TrayAppContext : ApplicationContext
 
                 if (!File.Exists(expectedPath))
                 {
-                    Storage.DeleteFolder(data);
-                    continue; // 復活させない
+                    LogToFile($"LoadExistingFolders: shortcut missing for '{data.FolderName}' ({data.Id}), attempting to regenerate before giving up.");
+                    try
+                    {
+                        string icoPath = IconGenerator.GenerateIconFile(data);
+                        ShortcutManager.CreateOrUpdateShortcut(data, icoPath);
+                        Storage.Save(data);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogToFile($"LoadExistingFolders: regenerate failed: {ex}");
+                    }
+
+                    if (!File.Exists(Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                            data.ShortcutFileName)))
+                    {
+                        // 再生成しても実体が作れない場合のみ、本当にユーザーが削除したとみなす
+                        LogToFile($"LoadExistingFolders: still missing after regenerate, deleting '{data.FolderName}' ({data.Id}).");
+                        Storage.DeleteFolder(data);
+                        continue; // 復活させない
+                    }
                 }
             }
 

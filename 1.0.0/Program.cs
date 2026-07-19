@@ -11,12 +11,22 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        ApplicationConfiguration.Initialize();
+        // どのスレッドで例外が発生しても(FileSystemWatcherのイベント等、UIスレッド外を含む)
+        // 必ずクラッシュログに残す。これが無いと原因不明のまま無言でプロセスが終了してしまう。
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            LogCrash("AppDomain.UnhandledException", e.ExceptionObject as Exception);
 
-        // WindowsFormsSynchronizationContextを明示的にセットする。
-        // Application.Run()を呼ぶ前はSynchronizationContext.Currentがnullのため、
-        // TrayAppContextのコンストラクタでこれをキャプチャできるようにする。
-        //SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            LogCrash("TaskScheduler.UnobservedTaskException", e.Exception);
+            e.SetObserved();
+        };
+
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) =>
+            LogCrash("Application.ThreadException", e.Exception);
+
+        ApplicationConfiguration.Initialize();
 
         using var mutex = new Mutex(true, MutexName, out bool isNew);
 
