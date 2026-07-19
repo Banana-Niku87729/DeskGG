@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -410,59 +412,25 @@ namespace DeskGGUpdater
 
         // ================= ダウンロード & インストール =================
 
+        /// <summary>
+        /// 差分更新: リモート(Latestフォルダ)の内容を再帰的に確認し、
+        /// ローカルに存在しない/内容が異なるファイルだけをダウンロードして上書きする。
+        /// リモートに存在しないローカルファイルは削除せずそのまま残す。
+        /// </summary>
         private static async Task DownloadAndInstallLatestAsync()
         {
             using var http = new HttpClient();
             http.DefaultRequestHeaders.UserAgent.ParseAdd("DeskGGUpdater");
             http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github.v3+json");
 
-            string tempDir = Path.Combine(Path.GetTempPath(), "DeskGGUpdate_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(tempDir);
-
-            try
-            {
-                await DownloadGitHubFolderAsync(http, GitHubApiContentsUrl, tempDir);
-
-                // 既存のインストール内容を削除してから新しいファイルで置き換える。
-                // ただしUpdater自身が InstallDir 内にいる場合、実行中の自分自身を
-                // 削除しようとするとフリーズ/例外になるため除外する。
-                foreach (var file in Directory.GetFiles(InstallDir))
-                {
-                    if (IsSelfRelatedFile(file))
-                    {
-                        continue;
-                    }
-
-                    File.Delete(file);
-                }
-
-                foreach (var dir in Directory.GetDirectories(InstallDir))
-                {
-                    Directory.Delete(dir, recursive: true);
-                }
-
-                // ダウンロードした新しいファイルで上書き。
-                // 万一Latest配布物にUpdaterと同名のファイルが含まれていても、
-                // 自分自身は上書きしない(次回起動時に反映される想定)。
-                CopyDirectory(tempDir, InstallDir, skipSelf: true);
-            }
-            finally
-            {
-                try
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
-                catch
-                {
-                    // 一時フォルダの削除失敗は無視
-                }
-            }
+            await SyncGitHubFolderAsync(http, GitHubApiContentsUrl, InstallDir);
         }
 
         /// <summary>
-        /// GitHub Contents APIを使ってフォルダ内容を再帰的にダウンロードする。
+        /// GitHub Contents APIを使ってフォルダ内容を再帰的に確認し、
+        /// 変更があったファイルのみをダウンロードしてlocalDirに反映する。
         /// </summary>
-        private static async Task DownloadGitHubFolderAsync(HttpClient http, string apiUrl, string localDir)
+        private static async Task SyncGitHubFolderAsync(HttpClient http, string apiUrl, string localDir)
         {
             Directory.CreateDirectory(localDir);
 
@@ -473,21 +441,58 @@ namespace DeskGGUpdater
             {
                 string name = item.GetProperty("name").GetString()!;
                 string type = item.GetProperty("type").GetString()!;
+                string localPath = Path.Combine(localDir, name);
 
                 if (type == "dir")
                 {
                     string subApiUrl = item.GetProperty("url").GetString()!;
-                    string subLocalDir = Path.Combine(localDir, name);
-                    await DownloadGitHubFolderAsync(http, subApiUrl, subLocalDir);
+                    await SyncGitHubFolderAsync(http, subApiUrl, localPath);
                 }
                 else if (type == "file")
                 {
+                    // Updater自身に関連するファイルは上書きしない(実行中ロック対策)。
+                    if (IsSelfRelatedFile(localPath))
+                    {
+                        continue;
+                    }
+
+                    string remoteSha = item.GetProperty("sha").GetString()!;
+
+                    // ローカルに同名ファイルがあり、内容(Git blob sha)が一致していればスキップ。
+                    if (File.Exists(localPath) && ComputeGitBlobSha1(localPath) == remoteSha)
+                    {
+                        continue;
+                    }
+
                     string downloadUrl = item.GetProperty("download_url").GetString()!;
-                    string localPath = Path.Combine(localDir, name);
                     byte[] data = await http.GetByteArrayAsync(downloadUrl);
                     await File.WriteAllBytesAsync(localPath, data);
                 }
             }
+        }
+
+        /// <summary>
+        /// GitのblobオブジェクトのSHA1ハッシュをローカルファイルから計算する。
+        /// 形式: "blob {byte数}\0{内容}" のSHA1。GitHub APIが返すsha値と同じ計算方法。
+        /// </summary>
+        private static string ComputeGitBlobSha1(string filePath)
+        {
+            byte[] content = File.ReadAllBytes(filePath);
+            byte[] header = Encoding.UTF8.GetBytes($"blob {content.Length}\0");
+
+            byte[] combined = new byte[header.Length + content.Length];
+            Buffer.BlockCopy(header, 0, combined, 0, header.Length);
+            Buffer.BlockCopy(content, 0, combined, header.Length, content.Length);
+
+            using var sha1 = SHA1.Create();
+            byte[] hash = sha1.ComputeHash(combined);
+
+            var sb = new StringBuilder(hash.Length * 2);
+            foreach (byte b in hash)
+            {
+                sb.Append(b.ToString("x2"));
+            }
+            return sb.ToString();
         }
 
         // ================= バージョン情報の更新 =================
