@@ -6,15 +6,15 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "DeskGG/1.0.0": {
+      "launcher/1.0.0": {
         "runtime": {
-          "DeskGG.dll": {}
+          "launcher.dll": {}
         }
       }
     }
   },
   "libraries": {
-    "DeskGG/1.0.0": {
+    "launcher/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
