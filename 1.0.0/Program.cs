@@ -16,7 +16,7 @@ internal static class Program
         // WindowsFormsSynchronizationContextを明示的にセットする。
         // Application.Run()を呼ぶ前はSynchronizationContext.Currentがnullのため、
         // TrayAppContextのコンストラクタでこれをキャプチャできるようにする。
-        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+        //SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
 
         using var mutex = new Mutex(true, MutexName, out bool isNew);
 

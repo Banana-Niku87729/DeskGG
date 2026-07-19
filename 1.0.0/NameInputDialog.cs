@@ -9,6 +9,7 @@ public class NameInputDialog : Form
 
     public NameInputDialog(string initialText)
     {
+        Icon = AppIcon.Shared;
         Text = "フォルダー名";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;

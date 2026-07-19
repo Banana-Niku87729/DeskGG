@@ -118,13 +118,17 @@ public static class Storage
         return SystemIcons.Application.ToBitmap();
     }
 
-    public static string SaveShortcutCopy(Guid folderId, string sourceLnkPath)
+    public static string SaveShortcutCopy(Guid folderId, string sourcePath)
     {
         string dir = Path.Combine(FolderDir(folderId), "Shortcuts");
         Directory.CreateDirectory(dir);
-        string fileName = Guid.NewGuid().ToString("N") + ".lnk";
+        // .lnk だけでなく .url (Steamのゲームショートカット等) もそのまま保存できるよう、
+        // 元ファイルの拡張子を維持してコピーする
+        string ext = Path.GetExtension(sourcePath);
+        if (string.IsNullOrEmpty(ext)) ext = ".lnk";
+        string fileName = Guid.NewGuid().ToString("N") + ext;
         string fullPath = Path.Combine(dir, fileName);
-        File.Copy(sourceLnkPath, fullPath, overwrite: true);
+        File.Copy(sourcePath, fullPath, overwrite: true);
         return fullPath;
     }
 

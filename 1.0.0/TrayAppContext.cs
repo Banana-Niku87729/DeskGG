@@ -14,6 +14,7 @@ public class TrayAppContext : ApplicationContext
     const string AppName = "DeskGG";
     const string Version = "1.0.0"; 
 
+    private readonly Control _uiMarshal;
     private readonly NotifyIcon _trayIcon;
     private readonly Dictionary<Guid, FolderData> _folders = new();
     private readonly Dictionary<Guid, PopupForm> _openPopups = new();
@@ -25,8 +26,8 @@ public class TrayAppContext : ApplicationContext
 
     public TrayAppContext()
     {
-        _uiContext = SynchronizationContext.Current
-            ?? throw new InvalidOperationException("SynchronizationContextが未設定です。Main側でSetSynchronizationContextを呼んでください。");
+        _uiMarshal = new Control();
+        _uiMarshal.CreateControl(); // この時点(コンストラクタ呼び出しスレッド=UIスレッド)でハンドルを強制生成
 
         _trayIcon = new NotifyIcon
         {
@@ -261,7 +262,14 @@ public class TrayAppContext : ApplicationContext
     }
 
     /// <summary>他プロセス(Named Pipe経由)からのコマンドをUIスレッドにマーシャリングして処理する。</summary>
-    public void PostCommand(string[] args) => _uiContext.Post(_ => HandleCommand(args), null);
+    public void PostCommand(string[] args)
+    {
+        if (_uiMarshal.IsHandleCreated && !_uiMarshal.IsDisposed)
+        {
+            _uiMarshal.BeginInvoke(new Action(() => HandleCommand(args)));
+        }
+    }
+
 
     /// <summary>
     /// "--show-folder {guid} [ドロップされたファイルパス...]" を処理する。
@@ -326,7 +334,9 @@ public class TrayAppContext : ApplicationContext
     }
     private string ResolveTargetIfShortcut(Guid folderId, string path)
     {
-        if (string.Equals(Path.GetExtension(path), ".lnk", StringComparison.OrdinalIgnoreCase))
+        string ext = Path.GetExtension(path);
+
+        if (string.Equals(ext, ".lnk", StringComparison.OrdinalIgnoreCase))
         {
             string? resolved = ShortcutManager.ResolveShortcutTarget(path);
             if (!string.IsNullOrEmpty(resolved) && File.Exists(resolved))
@@ -336,6 +346,16 @@ public class TrayAppContext : ApplicationContext
             try { return Storage.SaveShortcutCopy(folderId, path); }
             catch { return path; }
         }
+
+        if (string.Equals(ext, ".url", StringComparison.OrdinalIgnoreCase))
+        {
+            // .url (Steamのゲームショートカット等)は実体パスを解決できないため、
+            // ファイル自体をフォルダー保存領域にコピーして永続化する。
+            // これをしないとデスクトップの元ファイルを消した時点で起動できなくなる。
+            try { return Storage.SaveShortcutCopy(folderId, path); }
+            catch { return path; }
+        }
+
         return path;
     }
 

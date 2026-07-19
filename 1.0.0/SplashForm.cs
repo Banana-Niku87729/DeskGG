@@ -7,6 +7,7 @@ internal class SplashForm : Form
 {
     public SplashForm(Image image)
     {
+        Icon = AppIcon.Shared;
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = false;

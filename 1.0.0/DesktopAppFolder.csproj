@@ -9,6 +9,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>DeskGG</AssemblyName>
     <RootNamespace>DeskGG</RootNamespace>
+    <Company>Rec877Dev</Company>
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <ApplicationIcon>icon.ico</ApplicationIcon>

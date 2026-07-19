@@ -31,6 +31,7 @@ public class PopupForm : Form
         _onChanged = onChanged;
         _onDeleteRequested = onDeleteRequested;
 
+        Icon = AppIcon.Shared;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -228,11 +229,12 @@ public class PopupForm : Form
             dragStarted = true;
             _lastDropWasInternalReorder = false; // ★ドラッグ開始時に必ずリセット
 
-            string dragPath = app.HiddenSourcePath ?? app.Path;
+            string sourcePath = app.HiddenSourcePath ?? app.Path;
+            string? dragPath = PrepareDragFile(sourcePath, app.Name);
 
             var data = new DataObject();
             data.SetData(InternalDragFormat, app.Id.ToString());
-            if (File.Exists(dragPath))
+            if (dragPath != null && File.Exists(dragPath))
             {
                 data.SetData(DataFormats.FileDrop, new[] { dragPath });
             }
@@ -298,6 +300,12 @@ public class PopupForm : Form
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("フォルダーから削除", null, (_, _) => RemoveApp(app));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("管理者として実行", null, (_, _) => RunAsAdmin(app));
+        menu.Items.Add("ファイルの場所を開く", null, (_, _) => OpenFileLocation(app));
+        menu.Items.Add("プロパティ", null, (_, _) => ShowProperties(app));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("その他のオプションを表示", null, (_, _) => ShowNativeContextMenu(app));
         panel.ContextMenuStrip = menu;
         picture.ContextMenuStrip = menu;
         label.ContextMenuStrip = menu;
@@ -391,6 +399,7 @@ public class PopupForm : Form
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = app.Path,
+                WorkingDirectory = Path.GetDirectoryName(app.Path) ?? "",
                 UseShellExecute = true
             };
             System.Diagnostics.Process.Start(psi);
@@ -406,6 +415,105 @@ public class PopupForm : Form
     private void RemoveApp(AppItem app)
     {
         RestoreAndRemove(app);
+    }
+
+    private void RunAsAdmin(AppItem app)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = app.Path,
+                WorkingDirectory = Path.GetDirectoryName(app.Path) ?? "",
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            System.Diagnostics.Process.Start(psi);
+            Hide();
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // UACダイアログでユーザーがキャンセルした場合など。何もしない。
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"管理者としての起動に失敗しました:\n{ex.Message}", "DeskGG",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OpenFileLocation(AppItem app)
+    {
+        try
+        {
+            if (!File.Exists(app.Path))
+            {
+                MessageBox.Show("ファイルが見つかりませんでした。", "DeskGG",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{app.Path}\"",
+                UseShellExecute = true
+            });
+        }
+        catch { /* ignore */ }
+    }
+
+    private void ShowProperties(AppItem app)
+    {
+        try { ShellContextMenu.ShowFileProperties(app.Path); }
+        catch { /* ignore */ }
+    }
+
+    private void ShowNativeContextMenu(AppItem app)
+    {
+        try { ShellContextMenu.Show(Handle, app.Path, Cursor.Position); }
+        catch { /* ignore */ }
+    }
+
+    /// <summary>
+    /// フォルダー内部の保存領域にあるショートカットコピー(GUIDファイル名)をそのままデスクトップへ
+    /// ドラッグすると、置いた先の名前もGUIDのままになってしまう。これを避けるため、ドラッグ時には
+    /// 表示名(app.Name)を付けた一時コピーを作り、そちらをドラッグデータに使う。
+    /// 元々デスクトップにあった実ファイル(隠しファイル化して復元する対象)は、
+    /// 既に正しい名前になっているのでそのまま使う。
+    /// </summary>
+    private static string? PrepareDragFile(string sourcePath, string displayName)
+    {
+        if (!File.Exists(sourcePath)) return null;
+
+        string currentName = Path.GetFileNameWithoutExtension(sourcePath);
+        if (string.Equals(currentName, displayName, StringComparison.Ordinal))
+            return sourcePath;
+
+        try
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "DesktopAppFolder_Drag");
+            Directory.CreateDirectory(tempDir);
+
+            string ext = Path.GetExtension(sourcePath);
+            string safeName = SanitizeFileName(displayName);
+            if (string.IsNullOrWhiteSpace(safeName)) safeName = "App";
+            string tempPath = Path.Combine(tempDir, safeName + ext);
+
+            File.Copy(sourcePath, tempPath, overwrite: true);
+            return tempPath;
+        }
+        catch
+        {
+            return sourcePath; // 失敗時は従来通りの動作にフォールバック
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        foreach (char c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '_');
+        return name.Trim();
     }
 
     public void UpdateHeaderText(string name)
@@ -569,7 +677,9 @@ public class PopupForm : Form
 
     private string ResolveTargetIfShortcut(string path)
     {
-        if (string.Equals(Path.GetExtension(path), ".lnk", StringComparison.OrdinalIgnoreCase))
+        string ext = Path.GetExtension(path);
+
+        if (string.Equals(ext, ".lnk", StringComparison.OrdinalIgnoreCase))
         {
             string? resolved = ShortcutManager.ResolveShortcutTarget(path);
             if (!string.IsNullOrEmpty(resolved) && File.Exists(resolved))
@@ -578,6 +688,18 @@ public class PopupForm : Form
             try { return Storage.SaveShortcutCopy(_data.Id, path); }
             catch { return path; }
         }
+
+        if (string.Equals(ext, ".url", StringComparison.OrdinalIgnoreCase))
+        {
+            // .url は Steamのゲームショートカット(steam://rungameid/...)などで使われる形式で、
+            // .lnkと違い「実体パス」を解決できない(URLを起動するだけの中身のため)。
+            // そのため .url ファイル自体をフォルダーの保存領域にコピーし、そちらを起動対象にする。
+            // これをしないと、デスクトップ上の元の.urlファイルが消えた/移動した時点で
+            // 「指定されたファイルが見つかりません」エラーになってしまう。
+            try { return Storage.SaveShortcutCopy(_data.Id, path); }
+            catch { return path; }
+        }
+
         return path;
     }
 
