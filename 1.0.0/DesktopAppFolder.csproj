@@ -29,5 +29,10 @@
   <Compile Remove="launcher\bin\**" />
   <EmbeddedResource Remove="launcher\**" />
   <None Remove="launcher\**" />
+  <Compile Remove="Setting\**" />
+  <Compile Remove="Setting\obj\**" />
+  <Compile Remove="Setting\bin\**" />
+  <EmbeddedResource Remove="Setting\**" />
+  <None Remove="Setting\**" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>settings</AssemblyName>
+    <RootNamespace>DesktopAppFolder</RootNamespace>
+    <Company>Rec877Dev</Company>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 本体(DeskGG)側のクラスをそのままソースリンクで共有する。
+         同じ %AppData%\DesktopAppFolder のデータを直接読み書きするため、
+         別プロジェクトとして分けつつロジックの二重管理を避けている。 -->
+    <Compile Include="..\FolderData.cs">
+      <Link>Shared\FolderData.cs</Link>
+    </Compile>
+    <Compile Include="..\AppItem.cs">
+      <Link>Shared\AppItem.cs</Link>
+    </Compile>
+    <Compile Include="..\Storage.cs">
+      <Link>Shared\Storage.cs</Link>
+    </Compile>
+    <Compile Include="..\IconGenerator.cs">
+      <Link>Shared\IconGenerator.cs</Link>
+    </Compile>
+    <Compile Include="..\ShortcutManager.cs">
+      <Link>Shared\ShortcutManager.cs</Link>
+    </Compile>
+    <Compile Include="..\AppIcon.cs">
+      <Link>Shared\AppIcon.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

@@ -191,6 +191,9 @@ public class TrayAppContext : ApplicationContext
         menu.Items.Add("新規フォルダー作成", null, (_, _) => CreateNewFolder());
         menu.Items.Add(new ToolStripSeparator());
 
+        menu.Items.Add("設定を開く", null, (_, _) => LaunchSettingsApp());
+        menu.Items.Add(new ToolStripSeparator());
+
         var startupItem = new ToolStripMenuItem("Windows起動時に自動実行")
         {
             CheckOnClick = true,
@@ -225,6 +228,65 @@ public class TrayAppContext : ApplicationContext
         menu.Items.Add("終了", null, (_, _) => ExitApp());
 
         return menu;
+    }
+
+    /// <summary>
+    /// C:\rec877dev\valid にある「deskgg」ファイル(拡張子なし)を読み、
+    /// その中に書かれたソフトのフルパスを起点に "\start\setting.exe" を起動する。
+    /// </summary>
+    private const string DeskggPathFile = @"C:\rec877dev\valid\deskgg";
+
+    private void LaunchSettingsApp()
+    {
+        try
+        {
+            if (!File.Exists(DeskggPathFile))
+            {
+                LogToFile($"LaunchSettingsApp: deskgg file not found at '{DeskggPathFile}'");
+                MessageBox.Show(
+                    $"設定ファイルが見つかりません。\n{DeskggPathFile}",
+                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 1行目に書かれているフルパスを取得(前後の空白・改行を除去)
+            string basePath = File.ReadLines(DeskggPathFile).FirstOrDefault()?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrEmpty(basePath))
+            {
+                LogToFile("LaunchSettingsApp: deskgg file is empty");
+                MessageBox.Show(
+                    "設定ファイルの中身が空です。",
+                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string settingsExePath = Path.Combine(basePath, "start", "settings.exe");
+
+            if (!File.Exists(settingsExePath))
+            {
+                LogToFile($"LaunchSettingsApp: setting.exe not found at '{settingsExePath}'");
+                MessageBox.Show(
+                    $"setting.exe が見つかりません。\n{settingsExePath}",
+                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(settingsExePath)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Path.GetDirectoryName(settingsExePath) ?? basePath
+            });
+
+            LogToFile($"LaunchSettingsApp: launched '{settingsExePath}'");
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"LaunchSettingsApp: FAILED: {ex}");
+            MessageBox.Show(
+                $"設定アプリの起動に失敗しました。\n{ex.Message}",
+                "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void LoadExistingFolders()
@@ -286,6 +348,42 @@ public class TrayAppContext : ApplicationContext
         }
     }
 
+    /// <summary>
+    /// settings.exe側でフォルダーの追加/編集/削除が行われた後に呼ばれる。
+    /// ディスク上(Storage)の内容を正として、メモリ上の_foldersを再同期する。
+    /// アイコン/ショートカットの生成自体はsettings.exe側で完了済みのため、ここではしない。
+    /// </summary>
+    private void ReloadFoldersFromDisk()
+    {
+        var onDisk = Storage.LoadAll().ToDictionary(d => d.Id);
+
+        // 削除されたフォルダー: 開いていればポップアップを閉じ、一覧から外す
+        foreach (var id in _folders.Keys.Where(id => !onDisk.ContainsKey(id)).ToArray())
+        {
+            if (_openPopups.TryGetValue(id, out var popup) && !popup.IsDisposed)
+            {
+                popup.Close();
+                _openPopups.Remove(id);
+            }
+            _folders.Remove(id);
+        }
+
+        // 追加/更新されたフォルダー
+        foreach (var data in onDisk.Values)
+        {
+            _folders[data.Id] = data;
+
+            if (_openPopups.TryGetValue(data.Id, out var popup) && !popup.IsDisposed)
+            {
+                popup.UpdateHeaderText(data.FolderName);
+                popup.RefreshGrid();
+            }
+        }
+
+        RefreshDesktopIcons();
+        LogToFile("HandleCommand: reload from disk completed");
+    }
+
     private void CreateNewFolder()
     {
         var data = Storage.CreateNew($"新しいフォルダー {_folders.Count + 1}", new Point(100, 100));
@@ -314,6 +412,15 @@ public class TrayAppContext : ApplicationContext
     public void HandleCommand(string[] args)
     {
         LogToFile($"HandleCommand: args={string.Join(",", args)}");
+
+        // 設定アプリ(settings.exe)がフォルダーの追加/編集/削除を行った後に送ってくる通知。
+        // 常駐中のこのプロセスが持つメモリ上の状態(_folders)をディスクの内容と再同期する。
+        if (args.Length >= 1 && args[0] == "--reload")
+        {
+            ReloadFoldersFromDisk();
+            return;
+        }
+
         if (args.Length < 2 || args[0] != "--show-folder")
         {
             LogToFile("HandleCommand: rejected (bad args)");
