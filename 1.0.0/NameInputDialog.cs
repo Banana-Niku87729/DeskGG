@@ -10,7 +10,7 @@ public class NameInputDialog : Form
     public NameInputDialog(string initialText)
     {
         Icon = AppIcon.Shared;
-        Text = "フォルダー名";
+        Text = Loc.T("nameinput.title");
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
@@ -20,7 +20,7 @@ public class NameInputDialog : Form
 
         var label = new Label
         {
-            Text = "新しいフォルダー名を入力してください:",
+            Text = Loc.T("nameinput.label"),
             AutoSize = true,
             Location = new Point(12, 12)
         };
@@ -34,14 +34,14 @@ public class NameInputDialog : Form
 
         var okButton = new Button
         {
-            Text = "OK",
+            Text = Loc.T("ok"),
             DialogResult = DialogResult.OK,
             Location = new Point(112, 60)
         };
 
         var cancelButton = new Button
         {
-            Text = "キャンセル",
+            Text = Loc.T("cancel"),
             DialogResult = DialogResult.Cancel,
             Location = new Point(193, 60)
         };

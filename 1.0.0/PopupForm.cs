@@ -299,13 +299,13 @@ public class PopupForm : Form
         panel.DragDrop += (s, e) => HandleInternalReorder(e, app);
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("フォルダーから削除", null, (_, _) => RemoveApp(app));
+        menu.Items.Add(Loc.T("popup.remove_from_folder"), null, (_, _) => RemoveApp(app));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("管理者として実行", null, (_, _) => RunAsAdmin(app));
-        menu.Items.Add("ファイルの場所を開く", null, (_, _) => OpenFileLocation(app));
-        menu.Items.Add("プロパティ", null, (_, _) => ShowProperties(app));
+        menu.Items.Add(Loc.T("popup.run_as_admin"), null, (_, _) => RunAsAdmin(app));
+        menu.Items.Add(Loc.T("popup.open_file_location"), null, (_, _) => OpenFileLocation(app));
+        menu.Items.Add(Loc.T("popup.properties"), null, (_, _) => ShowProperties(app));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("その他のオプションを表示", null, (_, _) => ShowNativeContextMenu(app));
+        menu.Items.Add(Loc.T("popup.show_more_options"), null, (_, _) => ShowNativeContextMenu(app));
         panel.ContextMenuStrip = menu;
         picture.ContextMenuStrip = menu;
         label.ContextMenuStrip = menu;
@@ -407,7 +407,7 @@ public class PopupForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"起動に失敗しました:\n{ex.Message}", "DeskGG",
+            MessageBox.Show(Loc.F("popup.launch_failed", ex.Message), Loc.T("appname"),
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -437,7 +437,7 @@ public class PopupForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"管理者としての起動に失敗しました:\n{ex.Message}", "DeskGG",
+            MessageBox.Show(Loc.F("popup.admin_launch_failed", ex.Message), Loc.T("appname"),
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -448,7 +448,7 @@ public class PopupForm : Form
         {
             if (!File.Exists(app.Path))
             {
-                MessageBox.Show("ファイルが見つかりませんでした。", "DeskGG",
+                MessageBox.Show(Loc.T("popup.file_not_found"), Loc.T("appname"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -525,15 +525,15 @@ public class PopupForm : Form
     {
         var menu = new ContextMenuStrip();
 
-        menu.Items.Add("フォルダー名を変更", null, (_, _) => RenameFolder());
-        menu.Items.Add("フォルダーをカスタマイズ...", null, (_, _) => CustomizeColor());
+        menu.Items.Add(Loc.T("popup.rename_folder"), null, (_, _) => RenameFolder());
+        menu.Items.Add(Loc.T("popup.customize_folder"), null, (_, _) => CustomizeColor());
 
-        menu.Items.Add("中身をすべて削除", null, (_, _) =>
+        menu.Items.Add(Loc.T("popup.remove_all_contents"), null, (_, _) =>
         {
             _suppressAutoHide = true;
             try
             {
-                if (MessageBox.Show(this, "フォルダー内のすべてのアプリを削除しますか?", "確認",
+                if (MessageBox.Show(this, Loc.T("popup.remove_all_confirm"), Loc.T("confirm_title"),
                         MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     foreach (var app in _data.Apps.ToList()) RestoreAndRemove(app);
@@ -544,13 +544,13 @@ public class PopupForm : Form
 
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add("このフォルダーを削除", null, (_, _) =>
+        menu.Items.Add(Loc.T("popup.delete_this_folder"), null, (_, _) =>
         {
             _suppressAutoHide = true;
             try
             {
-                if (MessageBox.Show(this, $"「{_data.FolderName}」を削除しますか?(中のアプリ自体は削除されません)",
-                        "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+                if (MessageBox.Show(this, Loc.F("popup.delete_folder_confirm", _data.FolderName),
+                        Loc.T("confirm_title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
                 {
                     _onDeleteRequested(_data);
                     Hide();

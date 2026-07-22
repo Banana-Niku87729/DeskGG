@@ -25,6 +25,8 @@ public class TrayAppContext : ApplicationContext
 
     public TrayAppContext()
     {
+        Loc.Load();
+
         _uiMarshal = new Control();
         _uiMarshal.CreateControl(); // この時点(コンストラクタ呼び出しスレッド=UIスレッド)でハンドルを強制生成
 
@@ -188,13 +190,13 @@ public class TrayAppContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         version.Enabled = false;
 
-        menu.Items.Add("新規フォルダー作成", null, (_, _) => CreateNewFolder());
+        menu.Items.Add(Loc.T("tray.new_folder"), null, (_, _) => CreateNewFolder());
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add("設定を開く", null, (_, _) => LaunchSettingsApp());
+        menu.Items.Add(Loc.T("tray.open_settings"), null, (_, _) => LaunchSettingsApp());
         menu.Items.Add(new ToolStripSeparator());
 
-        var startupItem = new ToolStripMenuItem("Windows起動時に自動実行")
+        var startupItem = new ToolStripMenuItem(Loc.T("tray.run_at_startup"))
         {
             CheckOnClick = true,
             Checked = StartupHelper.IsRegistered()
@@ -204,28 +206,28 @@ public class TrayAppContext : ApplicationContext
 
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add("Ko-Fiを開く", null, (_, _) =>
+        menu.Items.Add(Loc.T("tray.open_kofi"), null, (_, _) =>
         {
             try { Process.Start(new ProcessStartInfo("https://ko-fi.com/rec877dev") { UseShellExecute = true }); }
             catch { /* ignore */ }
         });
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add("サポートDiscordサーバーに参加", null, (_, _) =>
+        menu.Items.Add(Loc.T("tray.join_discord"), null, (_, _) =>
         {
             try { Process.Start(new ProcessStartInfo("https://discord.gg/AYWMDp3a8b") { UseShellExecute = true }); }
             catch { /* ignore */ }
         });
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add("開発者のTwitterを開く", null, (_, _) =>
+        menu.Items.Add(Loc.T("tray.open_twitter"), null, (_, _) =>
         {
             try { Process.Start(new ProcessStartInfo("https://twitter.com/bniku87729") { UseShellExecute = true }); }
             catch { /* ignore */ }
         });
 
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("終了", null, (_, _) => ExitApp());
+        menu.Items.Add(Loc.T("tray.exit"), null, (_, _) => ExitApp());
 
         return menu;
     }
@@ -244,8 +246,8 @@ public class TrayAppContext : ApplicationContext
             {
                 LogToFile($"LaunchSettingsApp: deskgg file not found at '{DeskggPathFile}'");
                 MessageBox.Show(
-                    $"設定ファイルが見つかりません。\n{DeskggPathFile}",
-                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Loc.F("tray.settings_file_missing", DeskggPathFile),
+                    Loc.T("appname"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -256,8 +258,8 @@ public class TrayAppContext : ApplicationContext
             {
                 LogToFile("LaunchSettingsApp: deskgg file is empty");
                 MessageBox.Show(
-                    "設定ファイルの中身が空です。",
-                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Loc.T("tray.settings_file_empty"),
+                    Loc.T("appname"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -267,8 +269,8 @@ public class TrayAppContext : ApplicationContext
             {
                 LogToFile($"LaunchSettingsApp: setting.exe not found at '{settingsExePath}'");
                 MessageBox.Show(
-                    $"setting.exe が見つかりません。\n{settingsExePath}",
-                    "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Loc.F("tray.setting_exe_missing", settingsExePath),
+                    Loc.T("appname"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -284,8 +286,8 @@ public class TrayAppContext : ApplicationContext
         {
             LogToFile($"LaunchSettingsApp: FAILED: {ex}");
             MessageBox.Show(
-                $"設定アプリの起動に失敗しました。\n{ex.Message}",
-                "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Loc.F("tray.settings_launch_failed", ex.Message),
+                Loc.T("appname"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -386,13 +388,13 @@ public class TrayAppContext : ApplicationContext
 
     private void CreateNewFolder()
     {
-        var data = Storage.CreateNew($"新しいフォルダー {_folders.Count + 1}", new Point(100, 100));
+        var data = Storage.CreateNew(Loc.F("folderedit.new_name_default", _folders.Count + 1), new Point(100, 100));
         _folders[data.Id] = data;
         RegenerateIconAndShortcut(data);
 
         MessageBox.Show(
-            $"デスクトップに「{data.FolderName}」を作成しました。",
-            "DeskGG", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Loc.F("tray.folder_created", data.FolderName),
+            Loc.T("appname"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     /// <summary>他プロセス(Named Pipe経由)からのコマンドをUIスレッドにマーシャリングして処理する。</summary>
@@ -417,6 +419,8 @@ public class TrayAppContext : ApplicationContext
         // 常駐中のこのプロセスが持つメモリ上の状態(_folders)をディスクの内容と再同期する。
         if (args.Length >= 1 && args[0] == "--reload")
         {
+            Loc.Load();
+            _trayIcon.ContextMenuStrip = BuildMenu();
             ReloadFoldersFromDisk();
             return;
         }
@@ -457,7 +461,7 @@ public class TrayAppContext : ApplicationContext
         {
             if (data.IsFull)
             {
-                MessageBox.Show("フォルダーは最大9個までです。", "DeskGG",
+                MessageBox.Show(Loc.T("tray.folder_full"), Loc.T("appname"),
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 break;
             }

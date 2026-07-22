@@ -19,13 +19,25 @@ public class SettingsForm : Form
     private readonly FlowLayoutPanel _flow;
     private readonly Panel _headerPanel;
     private readonly Button _addButton;
+    private readonly ComboBox _languageBox;
+
+    // コンボボックスの選択肢と AppLanguage の対応。表示名はそれぞれの言語の自称(ネイティブ名)にしておく。
+    private static readonly (AppLanguage Lang, string Label)[] LanguageOptions =
+    {
+        (AppLanguage.Jp, "日本語"),
+        (AppLanguage.En, "English"),
+        (AppLanguage.Kr, "한국어"),
+        (AppLanguage.Cn, "中文"),
+    };
 
     private List<FolderData> _folders = new();
 
     public SettingsForm()
     {
+        Loc.Load();
+
         Icon = AppIcon.Shared;
-        Text = "DeskGG 設定";
+        Text = Loc.T("settings.title");
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(880, 480);
         MinimumSize = new Size(120, 140);
@@ -48,7 +60,7 @@ public class SettingsForm : Form
 
         var titleLabel = new Label
         {
-            Text = "デスクトップフォルダー",
+            Text = Loc.T("settings.header"),
             AutoSize = true,
             Location = new Point(20, 16),
             Font = new Font("Yu Gothic UI", 13f, FontStyle.Bold),
@@ -56,16 +68,52 @@ public class SettingsForm : Form
             BackColor = Color.Transparent
         };
 
-        _addButton = CreateAccentButton("+ 追加", new Point(0, 12), new Size(96, 32));
+        // ── 言語切り替え ──────────────────────────────
+        var languageLabel = new Label
+        {
+            Text = Loc.T("settings.language_label"),
+            AutoSize = true,
+            Font = new Font("Yu Gothic UI", 9.5f),
+            ForeColor = TextColor,
+            BackColor = Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+
+        _languageBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Size = new Size(110, 28),
+            Font = new Font("Yu Gothic UI", 9.5f)
+        };
+        foreach (var (_, label) in LanguageOptions)
+        {
+            _languageBox.Items.Add(label);
+        }
+        int currentIndex = Array.FindIndex(LanguageOptions, o => o.Lang == Loc.Current);
+        _languageBox.SelectedIndex = currentIndex >= 0 ? currentIndex : 0;
+        _languageBox.SelectedIndexChanged += (_, _) => OnLanguageChanged();
+
+        _addButton = CreateAccentButton(Loc.T("settings.add_button"), new Point(0, 12), new Size(96, 32));
         _addButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _addButton.Click += (_, _) => AddFolder();
 
         _headerPanel.Controls.Add(titleLabel);
         _headerPanel.Controls.Add(_addButton);
-        _headerPanel.Resize += (_, _) =>
+        _headerPanel.Controls.Add(_languageBox);
+        _headerPanel.Controls.Add(languageLabel);
+
+        void LayoutHeaderRightControls()
         {
             _addButton.Location = new Point(_headerPanel.ClientSize.Width - _addButton.Width - 20, 12);
-        };
+            _languageBox.Location = new Point(_addButton.Left - _languageBox.Width - 12, 14);
+            languageLabel.Location = new Point(_languageBox.Left - languageLabel.Width - 6, 18);
+        }
+        _addButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _languageBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        languageLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+
+        LayoutHeaderRightControls();
+        _headerPanel.Resize += (_, _) => LayoutHeaderRightControls();
 
         // ── タイル一覧 ──────────────────────────────
         _flow = new FlowLayoutPanel
@@ -82,6 +130,24 @@ public class SettingsForm : Form
         Controls.Add(_headerPanel);
 
         RefreshList();
+    }
+
+    /// <summary>言語コンボボックスの選択が変わった時。_language ファイルへ書き戻し、再起動を促す。</summary>
+    private void OnLanguageChanged()
+    {
+        int idx = _languageBox.SelectedIndex;
+        if (idx < 0 || idx >= LanguageOptions.Length) return;
+
+        var selected = LanguageOptions[idx].Lang;
+        if (selected == Loc.Current) return;
+
+        Loc.SetLanguage(selected);
+
+        // 常駐中のDeskGG本体(トレイアプリ)にも変更を伝え、メニュー文言などを更新させる
+        PipeNotifier.NotifyReload();
+
+        MessageBox.Show(this, Loc.T("settings.language_changed"), Loc.T("settings.title"),
+            MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     // ── Win11風アクセントボタン生成 ──────────────────────────────
@@ -161,7 +227,8 @@ public class SettingsForm : Form
 
     private void AddFolder()
     {
-        using var dlg = new FolderEditDialog("フォルダーの追加", $"新しいフォルダー {_folders.Count + 1}", 0);
+        using var dlg = new FolderEditDialog(Loc.T("folderedit.add_title"),
+            Loc.F("folderedit.new_name_default", _folders.Count + 1), 0);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         var data = Storage.CreateNew(dlg.FolderNameInput, new Point(100, 100));
@@ -177,7 +244,7 @@ public class SettingsForm : Form
 
     private void EditFolder(FolderData data)
     {
-        using var dlg = new FolderEditDialog("フォルダーの編集", data.FolderName, data.ThemeColor);
+        using var dlg = new FolderEditDialog(Loc.T("folderedit.edit_title"), data.FolderName, data.ThemeColor);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         data.FolderName = dlg.FolderNameInput;
@@ -191,8 +258,8 @@ public class SettingsForm : Form
     private void DeleteFolder(FolderData data)
     {
         var result = MessageBox.Show(this,
-            $"「{data.FolderName}」を削除しますか?\n(フォルダー内のアプリ自体は削除されません)",
-            "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            Loc.F("settings.delete_confirm", data.FolderName),
+            Loc.T("confirm_title"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
         if (result != DialogResult.Yes) return;
 
         ShortcutManager.DeleteShortcut(data);
@@ -268,8 +335,8 @@ internal sealed class FolderTile : Panel
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("編集", null, (_, _) => EditRequested?.Invoke(this, EventArgs.Empty));
-        menu.Items.Add("削除", null, (_, _) => DeleteRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(Loc.T("tile.edit"), null, (_, _) => EditRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(Loc.T("tile.delete"), null, (_, _) => DeleteRequested?.Invoke(this, EventArgs.Empty));
         ContextMenuStrip = menu;
 
         MouseEnter += (_, _) => { _hovering = true; Invalidate(); };

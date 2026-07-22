@@ -37,6 +37,9 @@
     <Compile Include="..\AppIcon.cs">
       <Link>Shared\AppIcon.cs</Link>
     </Compile>
+    <Compile Include="..\Localization.cs">
+      <Link>Shared\Localization.cs</Link>
+    </Compile>
   </ItemGroup>
 
 </Project>

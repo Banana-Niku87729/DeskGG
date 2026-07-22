@@ -30,7 +30,7 @@ public class FolderEditDialog : Form
 
         var nameLabel = new Label
         {
-            Text = "フォルダー名:",
+            Text = Loc.T("folderedit.name_label"),
             AutoSize = true,
             Location = new Point(16, 18)
         };
@@ -43,7 +43,7 @@ public class FolderEditDialog : Form
 
         var colorLabel = new Label
         {
-            Text = "テーマカラー:",
+            Text = Loc.T("folderedit.theme_label"),
             AutoSize = true,
             Location = new Point(16, 78)
         };
@@ -58,7 +58,7 @@ public class FolderEditDialog : Form
 
         _colorButton = new Button
         {
-            Text = "色を選択...",
+            Text = Loc.T("folderedit.pick_color"),
             Location = new Point(58, 99),
             Size = new Size(120, 30),
             AutoSize = false
@@ -67,7 +67,7 @@ public class FolderEditDialog : Form
 
         var resetButton = new Button
         {
-            Text = "既定色に戻す",
+            Text = Loc.T("folderedit.reset_color"),
             Location = new Point(186, 99),
             Size = new Size(120, 30),
             AutoSize = false
@@ -86,7 +86,7 @@ public class FolderEditDialog : Form
 
         var cancelButton = new Button
         {
-            Text = "キャンセル",
+            Text = Loc.T("cancel"),
             DialogResult = DialogResult.Cancel,
             Size = new Size(buttonWidth, buttonHeight),
             AutoSize = false,
@@ -96,7 +96,7 @@ public class FolderEditDialog : Form
 
         var okButton = new Button
         {
-            Text = "OK",
+            Text = Loc.T("ok"),
             DialogResult = DialogResult.OK,
             Size = new Size(buttonWidth, buttonHeight),
             AutoSize = false,
@@ -107,7 +107,7 @@ public class FolderEditDialog : Form
         {
             if (string.IsNullOrWhiteSpace(_nameBox.Text))
             {
-                MessageBox.Show(this, "フォルダー名を入力してください。", "DeskGG設定",
+                MessageBox.Show(this, Loc.T("folderedit.name_required"), Loc.T("settings.title"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 DialogResult = DialogResult.None;
             }
